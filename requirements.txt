@@ -1,0 +1,12 @@
+pandas==2.3.3
+scikit-learn==1.7.1
+tsfresh==0.21.1
+pymssql==2.3.13
+pyarrow==21.0
+dotenv==0.9.9
+psycopg2-binary==2.9.11
+sqlalchemy==2.0.20
+networkx==3.5
+holidays
+matplotlib
+pvlib

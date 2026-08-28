@@ -1,0 +1,4 @@
+*.pkl
+
+# Virtual environments
+.test_venv/
