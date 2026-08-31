@@ -39,7 +39,7 @@ def load_model(config_name: str):
         return data["model"], data["config"], data["feature_names"]
     return data, None
 
-def fetch_latest_data(config: ModelConfig, feature_names=None) -> pd.DataFrame:
+def fetch_latest_data(config: ModelConfig, feature_names=None, end_date: datetime = None) -> pd.DataFrame:
     """
     Fetches the most recent chunk of data needed for feature engineering.
     The lookback period is determined by the largest window size used in feature creation.
@@ -48,7 +48,11 @@ def fetch_latest_data(config: ModelConfig, feature_names=None) -> pd.DataFrame:
     max_roll_size = max(raw_params.win_size for _,params in feat_params.items() for raw_params in params)
     lookback_days = max_roll_size / 96 + 2  # Convert 15-min intervals to days and add a buffer
     
-    end_date = datetime.now()
+    if end_date is None:
+        end_date = datetime.now()
+
+    end_date = datetime.strptime(end_date, '%Y-%m-%d')
+
     #round end_date down to the nearest 15-minute mark
     end_date = end_date - timedelta(minutes=end_date.minute % 15, seconds=end_date.second, microseconds=end_date.microsecond)
     start_date = end_date - timedelta(days=lookback_days)
@@ -87,14 +91,38 @@ def fetch_arso_forecasts_for_realtime(config: ModelConfig, curr_date: str, featu
 
 def plot_predictions(forecast_df: pd.DataFrame, X_additional: list, config: ModelConfig):
 
-    plt.plot(forecast_df.index, forecast_df['forecast'], label='Real-time Forecast', color='red')
+    fig, ax1 = plt.subplots()
+
+    # Real-time forecast
+    ax1.plot(
+        forecast_df.index,
+        forecast_df['forecast'],
+        label='Real-time Forecast',
+        color='red'
+    )
+    ax1.set_xlabel("Time")
+    ax1.set_ylabel("Predicted Value")
+
+    # Second y-axis for additional forecasts
+    ax2 = ax1.twinx()
+
     for i, additional_df in enumerate(X_additional):
         if not additional_df.empty:
-            plt.plot(forecast_df.index, additional_df.iloc[0, :], label=additional_df.columns[0][:-3], linestyle='--')
+            ax2.plot(
+                forecast_df.index,
+                additional_df.iloc[0, :],
+                label=additional_df.columns[0][:-3],
+                linestyle='--'
+            )
+
+    ax2.set_ylabel("Additional Forecast Value")
+
+    # Combined legend
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2)
+
     plt.title(f"Real-time Forecast for {config.CONFIG_NAME}")
-    plt.xlabel("Time")
-    plt.ylabel("Predicted Value")
-    plt.legend()
     plt.xticks(rotation=45)
     plt.tight_layout()
     plt.show()
@@ -145,7 +173,7 @@ def tranform(config: ModelConfig, forecast_df: pd.DataFrame) -> pd.DataFrame:
 
 
 
-def main(config_name: str):
+def main(config_name: str, forecast_date: str = None):
     """
     Main function to generate and display a real-time forecast.
     """
@@ -155,7 +183,7 @@ def main(config_name: str):
 
 
     # 3. Engineer features for the fetched data
-    df_features = fetch_latest_data(config,feature_names=feat_names)
+    df_features = fetch_latest_data(config,feature_names=feat_names, end_date=forecast_date)
 
     # 4. Get the most recent feature set
     # We take the last row, which corresponds to the latest timestamp
@@ -260,5 +288,6 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Generate real-time forecast for a specified configuration.")
     parser.add_argument("--config-name", type=str, help="The name of the configuration to use for the forecast.")
+    parser.add_argument("--forecast-date", type=str, help="The date for which to generate the forecast in YYYY-MM-DD format. Defaults to today.", default=datetime.now())
     args = parser.parse_args()
-    main(args.config_name)
+    main(args.config_name, args.forecast_date)
