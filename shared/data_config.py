@@ -31,4 +31,12 @@ FORECASTS_PASSWORD = os.getenv('FORECASTS_PASSWORD')
 FORECASTS_TABLE = "ForecastsData"
 FORECASTS_TYPE = "local"  # Options: 'local', 'mssql', 'postgres'
 
+# Output database connection parameters
+OUTPUT_DB_SERVER = None
+OUTPUT_DB_DATABASE = "example.db"
+OUTPUT_DB_USER = None
+OUTPUT_DB_PASSWORD = os.getenv('OUTPUT_DB_PASSWORD')
+OUTPUT_DB_TABLE = "OutputForecasts"
+OUTPUT_DB_TYPE = 'local'
+
 COUNTRY_CODE = 'SI'

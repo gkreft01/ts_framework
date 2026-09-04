@@ -7,7 +7,6 @@ HEAT_PUMP_CONFIG = ModelConfig(
     config_name="heat_pump",
     target_name='Active_Power',
     target_smooth_size=8,
-    freq='15min',
     horizon=96,
     feature_params={'Active_Power': [FeatureSpec(96, 1, False, 8, 0), FeatureSpec(96*7, 96, False)]},
     top_n_features=50,

@@ -7,6 +7,7 @@ import pandas as pd
 import joblib
 import sys
 import os
+import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 # Add the parent directory to the Python path to allow for relative imports
@@ -81,7 +82,7 @@ def evaluate(model, X_test: pd.DataFrame, Y_test: pd.DataFrame, config: ModelCon
     print(f"Mean Absolute Error (MAE): {mae:.4f}")
     print(f"Mean Absolute Scaled Error (MASE): {mase:.4f}")
 
-    plot_predictions(predictions_df, Y_test, config, X_additional=X_additional)
+    plot_predictions(predictions_df, Y_test, config, X_additional=X_additional, num_days=1)
 
     
     return metrics
@@ -91,7 +92,9 @@ def plot_predictions(predictions: pd.DataFrame, Y_test: pd.DataFrame, config: Mo
     Plots the predictions against the true values.
     """
 
-    fig, axs = plt.subplots(num_days, 1, figsize=(12, 3 * num_days), sharex=False)
+    fig, axs = plt.subplots(num_days, 1, figsize=(10, 3 * num_days), sharex=False)
+
+    axs = np.atleast_1d(axs)
 
     all_handles = {}
     secondary_axes = []
@@ -139,18 +142,33 @@ def plot_predictions(predictions: pd.DataFrame, Y_test: pd.DataFrame, config: Mo
         ax.set_ylabel("Prediction")
         ax2.set_ylabel("Additional features")
 
-    fig.supxlabel("Time")
-    fig.supylabel("Prediction Value")
-    fig.suptitle(f"Predictions vs True Values for {config.CONFIG_NAME}")
+    fig.supxlabel(
+        "Time",
+        y=0.01,
+        fontsize=14,
+    )
+    fig.suptitle(
+    f"Predictions vs True Values for {config.CONFIG_NAME}",
+    x=0.45,
+    y=0.90
+    )
 
-    # Single legend without duplicates
     fig.legend(
         all_handles.values(),
         all_handles.keys(),
         loc="upper right",
+        bbox_to_anchor=(0.98, 0.99),
+        fontsize="small",
     )
 
-    plt.tight_layout()
+    fig.subplots_adjust(
+        top=0.75,
+        bottom=0.33,   # more room for date labels
+        left=0.12,     # more room for left y-axis labels
+        right=0.88,    # more room for right y-axis label
+    )
+
+
     plt.savefig(os.path.join(PLOTS_DIR, f"{config.CONFIG_NAME}_predictions_plot.pdf"))
 
 def main(config: ModelConfig, model: MultiHorizonForest = None, X_test: pd.DataFrame = None, Y_test: pd.DataFrame = None, importances: pd.DataFrame = None):

@@ -11,18 +11,17 @@ from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import pvlib
 import numpy as np
-import psycopg2
-from psycopg2.extras import execute_values
+from sqlalchemy import text
 
 
 # Add the parent directory to the Python path to allow for relative imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from shared.data_config import FORECASTS_DATABASE, FORECASTS_PASSWORD, FORECASTS_SERVER, FORECASTS_USER, MODELS_DIR
+from shared.data_config import  MODELS_DIR, OUTPUT_DB_SERVER, OUTPUT_DB_DATABASE, OUTPUT_DB_USER, OUTPUT_DB_PASSWORD, OUTPUT_DB_TABLE, OUTPUT_DB_TYPE
 from shared.model_config import ModelConfig
 from shared.features import extract_air_quality_features, extract_all_features
 
-from shared.db import fetch_arso_forecasts, reshape_arso_forecasts
+from shared.db import fetch_arso_forecasts, reshape_arso_forecasts, get_engine
 
 def load_model(config_name: str):
     """
@@ -214,7 +213,7 @@ def main(config_name: str, forecast_date: str = None):
     print("\n--- Forecast for the next", config.HORIZON, "steps ---")
     print(forecast_df)
 
-    #upload(forecast_df, config)
+    upload(forecast_df, config, end_date=forecast_date)
 
     # 8. Plot the forecast
     plot_predictions(forecast_df, X_additional, config)
@@ -237,45 +236,42 @@ def main(config_name: str, forecast_date: str = None):
         plt.show()
 
 # upload to postgres database
-def upload(forecast_df: pd.DataFrame, config: ModelConfig):
+def upload(forecast_df: pd.DataFrame, config: ModelConfig, end_date: str = None):
     """
     Uploads the forecast DataFrame to the PostgreSQL database.
     """
     print(f"Uploading forecast for {config.CONFIG_NAME} to database...")
 
     forecast_df['name'] = config.CONFIG_NAME
-    forecast_df["curr_time"] = datetime.now()
+
+    if end_date is None:
+        forecast_df["curr_time"] = datetime.now()
+    else:
+        forecast_df["curr_time"] = pd.to_datetime(end_date)
+
     forecast_df = forecast_df.reset_index().rename(columns={'index': 'forecast_time', 'forecast': 'value'})
 
 
-    conn = psycopg2.connect(
-        host=FORECASTS_SERVER,
-        database=FORECASTS_DATABASE,
-        user=FORECASTS_USER,
-        password=FORECASTS_PASSWORD,
-    )
+    engine = get_engine(OUTPUT_DB_TYPE, user=OUTPUT_DB_USER, password=OUTPUT_DB_PASSWORD, server=OUTPUT_DB_SERVER, database=OUTPUT_DB_DATABASE)
 
-    try:
-        with conn:
-            with conn.cursor() as cur:
-                rows = list(
-                    forecast_df[["name", "curr_time", "forecast_time", "value"]].itertuples(
-                        index=False, name=None
-                    )
-                )
 
-                execute_values(
-                    cur,
-                    """
-                    INSERT INTO model_forecasts (name, curr_time, forecast_time, value)
-                    VALUES %s
-                    ON CONFLICT (name, curr_time, forecast_time)
-                    DO UPDATE SET value = EXCLUDED.value
-                    """,
-                    rows,
-                )
-    finally:
-        conn.close()
+    rows = forecast_df[["name", "curr_time", "forecast_time", "value"]].copy()
+
+    rows["curr_time"] = rows["curr_time"].dt.strftime("%Y-%m-%d %H:%M:%S.%f")
+    rows["forecast_time"] = rows["forecast_time"].dt.strftime("%Y-%m-%d %H:%M:%S.%f")
+
+    rows = rows.to_dict("records")
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(f"""
+                INSERT INTO {OUTPUT_DB_TABLE}
+                    (name, curr_time, forecast_time, value)
+                VALUES
+                    (:name, :curr_time, :forecast_time, :value)
+            """),
+            rows,
+        )
 
     print(f"Upload complete. {len(forecast_df)} rows uploaded.")
 
